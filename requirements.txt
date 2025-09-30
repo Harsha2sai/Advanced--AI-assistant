@@ -1,9 +1,3 @@
-  # Core dependencies
-flask>=2.3.0
-flask-cors>=4.0.0
-flask-socketio>=5.3.0
-python-socketio>=5.8.0
-
 # AI/ML dependencies
 groq>=0.4.0
 openai>=1.0.0
@@ -16,30 +10,27 @@ sounddevice>=0.4.6
 
 # Google Cloud TTS
 google-cloud-texttospeech>=2.14.0
-
 google-cloud-speech>=2.22.0
 assemblyai>=0.22.0
 openai-whisper>=20230314
 # Audio processing
 pygame>=2.5.0
-
 # Utilities
 python-dotenv>=1.0.0
 requests>=2.31.0
 whispercpp
-
 SpeechRecognition
-
 pydub
-
 gTTS
-
-fastapi
-uvicorn
-
 python-dotenv
-
 python-multipart
-
 sounddevice
 soundfile
+google-api-python-client
+psutil
+pyautogui
+pyperclip
+screen-brightness-control
+comtypes
+pycaw
+pillow
