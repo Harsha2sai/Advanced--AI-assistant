@@ -1,280 +1,312 @@
-# gpt/skills/system_skills.py
-# Windows-focused implementations. Requires:
-# pip install psutil pyautogui pyperclip screen-brightness-control comtypes pycaw pillow
-
 import os
 import subprocess
-import shutil
-import json
-from typing import List, Optional, Dict, Any
+import logging
+from typing import Optional
 
-import psutil
-import pyautogui
-import pyperclip
-
-# Brightness
+# Windows volume control
 try:
-    import screen_brightness_control as sbc
-except Exception:
-    sbc = None
-
-# Volume via Windows Core Audio (pycaw)
-try:
-    from ctypes import POINTER, cast
+    from ctypes import cast, POINTER
     from comtypes import CLSCTX_ALL
     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-except Exception:
-    AudioUtilities = None
-    IAudioEndpointVolume = None
-    CLSCTX_ALL = None
-    cast = None
-    POINTER = None
+    PYCAW_AVAILABLE = True
+except ImportError:
+    PYCAW_AVAILABLE = False
 
-# -----------------------
-# App Launcher
-# -----------------------
-KNOWN_APPS = {
-    # Add more mappings as needed
-    "notepad": r"C:\Windows\System32\notepad.exe",
-    "calculator": r"C:\Windows\System32\calc.exe",
-    "paint": r"C:\Windows\System32\mspaint.exe",
-    "cmd": r"C:\Windows\System32\cmd.exe",
-    "powershell": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
-    "vscode": r"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-    "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "edge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+# Screenshot
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+except ImportError:
+    PYAUTOGUI_AVAILABLE = False
+
+# Brightness control
+try:
+    import screen_brightness_control as sbc
+    SBC_AVAILABLE = True
+except ImportError:
+    SBC_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
+
+# App launcher mapping for Windows
+WINDOWS_APPS = {
+    "notepad": "notepad.exe",
+    "calculator": "calc.exe", 
+    "paint": "mspaint.exe",
+    "cmd": "cmd.exe",
+    "command prompt": "cmd.exe",
+    "powershell": "powershell.exe",
+    "explorer": "explorer.exe",
+    "file explorer": "explorer.exe",
+    "my files": "explorer.exe",
+    "files": "explorer.exe",
+    "task manager": "taskmgr.exe",
+    "control panel": "control.exe",
+    "settings": "ms-settings:",
+    "chrome": "chrome.exe",
+    "firefox": "firefox.exe",
+    "edge": "msedge.exe",
+    "spotify": "spotify.exe",
+    "vs code": "code.exe",
+    "visual studio code": "code.exe",
+    "vscode": "code.exe",
+    "discord": "discord.exe",
+    "teams": "ms-teams:",
+    "word": "winword.exe",
+    "excel": "excel.exe",
+    "powerpoint": "powerpnt.exe",
+    "outlook": "outlook.exe",
 }
 
-def expand_env(path: str) -> str:
-    return os.path.expandvars(path)
-
-def launch_app(name_or_path: str) -> str:
-    """
-    Launch an application by friendly name or absolute path.
-    Returns a human-readable status string.
-    """
-    # Known app map
-    key = name_or_path.lower().strip()
-    target = KNOWN_APPS.get(key, name_or_path)
-
-    target = expand_env(target)
-
-    # If it looks like a path and exists, run it directly
-    if os.path.exists(target):
-        try:
-            subprocess.Popen([target], shell=True)
-            return f"Launched {target}"
-        except Exception as e:
-            return f"Failed to launch: {e}"
-
-    # Try to resolve via PATH or shell command
-    try:
-        subprocess.Popen([name_or_path], shell=True)
-        return f"Launched {name_or_path}"
-    except Exception:
-        return f"App not found: {name_or_path}"
-
-def open_website(url: str) -> str:
-    try:
-        subprocess.Popen(f'start "" "{url}"', shell=True)
-        return f"Opened {url}"
-    except Exception as e:
-        return f"Failed to open website: {e}"
-
-# -----------------------
-# Brightness Control
-# -----------------------
-def set_brightness(percent: int) -> str:
-    """
-    Set brightness 0-100. Requires screen-brightness-control and supported hardware.
-    """
-    if sbc is None:
-        return "Brightness control not available (library missing)."
-    percent = max(0, min(100, int(percent)))
-    try:
-        sbc.set_brightness(percent)
-        return f"Brightness set to {percent}%"
-    except Exception as e:
-        return f"Failed to set brightness: {e}"
-
-def get_brightness() -> str:
-    if sbc is None:
-        return "Brightness info not available."
-    try:
-        val = sbc.get_brightness(display=0)
-        if isinstance(val, list) and val:
-            val = val[0]
-        return f"Brightness is {val}%"
-    except Exception as e:
-        return f"Failed to read brightness: {e}"
-
-# -----------------------
-# Clipboard
-# -----------------------
-def clipboard_copy(text: str) -> str:
-    try:
-        pyperclip.copy(text)
-        return "Copied to clipboard."
-    except Exception as e:
-        return f"Clipboard copy failed: {e}"
-
-def clipboard_paste() -> str:
-    try:
-        return pyperclip.paste()
-    except Exception as e:
-        return f"Clipboard paste failed: {e}"
-
-# -----------------------
-# File Manager (basic)
-# -----------------------
-def list_dir(path: str) -> List[str]:
-    try:
-        return os.listdir(path)
-    except Exception as e:
-        return [f"Error: {e}"]
-
-def create_folder(path: str) -> str:
-    try:
-        os.makedirs(path, exist_ok=True)
-        return f"Folder ensured at {path}"
-    except Exception as e:
-        return f"Create folder failed: {e}"
-
-def create_file(path: str, content: str = "") -> str:
-    try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return f"File created: {path}"
-    except Exception as e:
-        return f"Create file failed: {e}"
-
-def delete_path(path: str) -> str:
-    try:
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-            return f"Folder deleted: {path}"
-        elif os.path.isfile(path):
-            os.remove(path)
-            return f"File deleted: {path}"
-        return "Path not found."
-    except Exception as e:
-        return f"Delete failed: {e}"
-
-def open_file_explorer(path: str) -> str:
-    try:
-        subprocess.Popen(f'explorer "{path}"')
-        return f"Opened Explorer at {path}"
-    except Exception as e:
-        return f"Open Explorer failed: {e}"
-
-# -----------------------
-# Volume Control (Windows)
-# -----------------------
-def _get_endpoint_volume():
-    if not (AudioUtilities and IAudioEndpointVolume and CLSCTX_ALL and cast and POINTER):
+# Volume Control Functions
+def _get_volume_interface():
+    """Get Windows volume interface using pycaw"""
+    if not PYCAW_AVAILABLE:
         return None
-    devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    volume = cast(interface, POINTER(IAudioEndpointVolume))
-    return volume
-
-def set_volume(percent: int) -> str:
-    """
-    Set master volume 0-100 using pycaw.
-    """
-    vol = _get_endpoint_volume()
-    if vol is None:
-        return "Volume control not available."
-    percent = max(0, min(100, int(percent)))
-    # pycaw uses scalar 0.0 - 1.0
     try:
-        # pycaw's IAudioEndpointVolume pointer exposes methods via _methods_ attribute
-        if not hasattr(vol, "SetMasterVolumeLevelScalar"):
-            return "Volume control not available (SetMasterVolumeLevelScalar missing)."
-        # Sometimes the method is available via __getattr__
-        set_scalar = getattr(vol, "SetMasterVolumeLevelScalar", None)
-        if set_scalar is None:
-            return "Volume control not available (SetMasterVolumeLevelScalar missing)."
-        set_scalar(percent / 100.0, None)
-        return f"Volume set to {percent}%"
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        return cast(interface, POINTER(IAudioEndpointVolume))
     except Exception as e:
-        return f"Volume set failed: {e}"
+        logger.error(f"Failed to get volume interface: {e}")
+        return None
 
 def get_volume() -> str:
-    vol = _get_endpoint_volume()
-    if vol is None:
-        return "Volume info not available."
+    """Get current volume level"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
     try:
-        get_scalar = getattr(vol, "GetMasterVolumeLevelScalar", None)
-        if get_scalar is None:
-            return "Volume info not available (GetMasterVolumeLevelScalar missing)."
-        scalar = get_scalar()
-        return f"Volume is {int(round(scalar * 100))}%"
+        # Get volume as scalar (0.0 to 1.0)
+        current_volume = volume_interface.GetMasterVolumeLevelScalar() # type: ignore
+        volume_percent = int(round(current_volume * 100))
+        logger.info(f"Current volume: {volume_percent}%")
+        return f"Volume is {volume_percent}%"
     except Exception as e:
-        return f"Volume read failed: {e}"
+        logger.error(f"Failed to get volume: {e}")
+        return f"Failed to get volume: {e}"
 
-def mute() -> str:
-    vol = _get_endpoint_volume()
-    if vol is None:
-        return "Mute not available."
+def set_volume(volume: int) -> str:
+    """Set volume to specific level (0-100)"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
     try:
-        set_mute = getattr(vol, "SetMute", None)
-        if set_mute is None:
-            return "Mute not available (SetMute missing)."
-        set_mute(1, None)
-        return "Muted."
+        volume = max(0, min(100, int(volume)))
+        volume_scalar = volume / 100.0
+        volume_interface.SetMasterVolumeLevelScalar(volume_scalar, None) # type: ignore
+        logger.info(f"Volume set to {volume}%")
+        return f"Volume set to {volume}%"
     except Exception as e:
-        return f"Mute failed: {e}"
+        logger.error(f"Failed to set volume: {e}")
+        return f"Failed to set volume: {e}"
 
-def unmute() -> str:
-    vol = _get_endpoint_volume()
-    if vol is None:
-        return "Unmute not available."
+def increase_volume(amount: int = 10) -> str:
+    """Increase volume by specified amount"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
     try:
-        set_mute = getattr(vol, "SetMute", None)
-        if set_mute is None:
-            return "Unmute not available (SetMute missing)."
-        set_mute(0, None)
-        return "Unmuted."
+        current_volume = volume_interface.GetMasterVolumeLevelScalar() # type: ignore
+        current_percent = int(round(current_volume * 100))
+        new_percent = min(100, current_percent + amount)
+        volume_interface.SetMasterVolumeLevelScalar(new_percent / 100.0, None) # type: ignore
+        logger.info(f"Volume increased from {current_percent}% to {new_percent}%")
+        return f"Volume increased to {new_percent}%"
     except Exception as e:
-        return f"Unmute failed: {e}"
+        logger.error(f"Failed to increase volume: {e}")
+        return f"Failed to increase volume: {e}"
 
-# -----------------------
-# System Info
-# -----------------------
-def system_info() -> Dict[str, Any]:
+def decrease_volume(amount: int = 10) -> str:
+    """Decrease volume by specified amount"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
     try:
-        cpu = psutil.cpu_percent(interval=0.5)
-        mem = psutil.virtual_memory()
-        batt = None
-        try:
-            batt = psutil.sensors_battery()
-        except Exception:
-            batt = None
-        net = psutil.net_if_stats()
-        return {
-            "cpu_percent": cpu,
-            "memory_percent": mem.percent,
-            "total_memory_gb": round(mem.total / (1024**3), 2),
-            "battery_percent": getattr(batt, "percent", None),
-            "plugged": getattr(batt, "power_plugged", None) if batt else None,
-            "network": {k: v.isup for k, v in net.items()},
-        }
+        current_volume = volume_interface.GetMasterVolumeLevelScalar() # type: ignore
+        current_percent = int(round(current_volume * 100))
+        new_percent = max(0, current_percent - amount)
+        volume_interface.SetMasterVolumeLevelScalar(new_percent / 100.0, None) # type: ignore
+        logger.info(f"Volume decreased from {current_percent}% to {new_percent}%")
+        return f"Volume decreased to {new_percent}%"
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Failed to decrease volume: {e}")
+        return f"Failed to decrease volume: {e}"
 
-# -----------------------
-# Screenshots
-# -----------------------
-def screenshot(path: str) -> str:
-    """
-    Save a screenshot PNG to path using pyautogui.
-    """
+def mute_volume() -> str:
+    """Mute system volume"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        img = pyautogui.screenshot()
-        img.save(path)
-        return f"Screenshot saved to {path}"
+        volume_interface.SetMute(1, None) # type: ignore
+        logger.info("Volume muted")
+        return "Volume muted"
     except Exception as e:
+        logger.error(f"Failed to mute: {e}")
+        return f"Failed to mute: {e}"
+
+def unmute_volume() -> str:
+    """Unmute system volume"""
+    volume_interface = _get_volume_interface()
+    if not volume_interface:
+        return "Volume control not available"
+    
+    try:
+        volume_interface.SetMute(0, None) # type: ignore
+        logger.info("Volume unmuted")
+        return "Volume unmuted"
+    except Exception as e:
+        logger.error(f"Failed to unmute: {e}")
+        return f"Failed to unmute: {e}"
+
+# App Launcher
+def launch_app(app_name: str, app_path: str) -> str:
+    """Launch Windows application using a provided path"""
+    if not app_path:
+        return f"Sorry, I could not find an installed app matching '{app_name}'."
+
+    logger.info(f"Attempting to launch '{app_name}' from path: '{app_path}'")
+
+    try:
+        if os.path.isdir(app_path):
+            # If directory, try to find executable inside common folders or just open folder
+            # For now open folder
+            os.startfile(app_path)
+            logger.info(f"Opened folder for {app_name}: {app_path}")
+            return f"Opened folder for {app_name}"
+        elif os.path.isfile(app_path):
+            # Launch executable file
+            subprocess.Popen([app_path], shell=True)
+            logger.info(f"Launched {app_name}: {app_path}")
+            return f"Launched {app_name}"
+        else:
+            # Unknown path type
+            logger.warning(f"Found application path, but can't launch '{app_name}': Unknown path type for {app_path}")
+            return f"Found application path, but can't launch '{app_name}'."
+    except Exception as e:
+        logger.error(f"Failed to launch '{app_name}' from '{app_path}': {str(e)}")
+        return f"Failed to launch '{app_name}': {str(e)}"
+
+# Screenshot
+def take_screenshot(filename: Optional[str] = None) -> str:
+    """Take a screenshot"""
+    if not PYAUTOGUI_AVAILABLE:
+        return "Screenshot functionality not available (pyautogui not installed)"
+    
+    try:
+        if not filename:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"screenshot_{timestamp}.png"
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(filename) if os.path.dirname(filename) else ".", exist_ok=True)
+        
+        # Take screenshot
+        screenshot = pyautogui.screenshot()
+        screenshot.save(filename)
+        
+        logger.info(f"Screenshot saved: {filename}")
+        return f"Screenshot saved as {filename}"
+        
+    except Exception as e:
+        logger.error(f"Screenshot failed: {e}")
         return f"Screenshot failed: {e}"
+
+# Brightness Control  
+def get_brightness() -> str:
+    """Get current brightness level"""
+    if not SBC_AVAILABLE:
+        return "Brightness control not available"
+    
+    try:
+        brightness = sbc.get_brightness(display=0)
+        if isinstance(brightness, list) and brightness:
+            brightness = brightness[0]
+        logger.info(f"Current brightness: {brightness}%")
+        return f"Brightness is {brightness}%"
+    except Exception as e:
+        logger.error(f"Failed to get brightness: {e}")
+        return f"Failed to get brightness: {e}"
+
+def set_brightness(brightness: int) -> str:
+    """Set brightness level (0-100)"""
+    if not SBC_AVAILABLE:
+        return "Brightness control not available"
+    
+    try:
+        brightness = max(0, min(100, int(brightness)))
+        sbc.set_brightness(brightness, display=0)
+        logger.info(f"Brightness set to {brightness}%")
+        return f"Brightness set to {brightness}%"
+    except Exception as e:
+        logger.error(f"Failed to set brightness: {e}")
+        return f"Failed to set brightness: {e}"
+
+def increase_brightness() -> str:
+    """Increase brightness by 10%"""
+    if not SBC_AVAILABLE:
+        return "Brightness control not available"
+    
+    try:
+        current_raw = sbc.get_brightness(display=0)
+        current_val: int
+        if isinstance(current_raw, list) and current_raw:
+            current_val = int(current_raw[0])
+        elif isinstance(current_raw, (int, float)):
+            current_val = int(current_raw)
+        else:
+            # Fallback or error handling if brightness is neither int, float, nor list
+            logger.error(f"Unexpected brightness type: {type(current_raw)}")
+            return "Failed to get brightness: Unexpected type"
+
+        new_brightness = min(100, current_val + 10)
+        sbc.set_brightness(new_brightness, display=0)
+        logger.info(f"Brightness increased to {new_brightness}%")
+        return f"Brightness increased to {new_brightness}%"
+    except Exception as e:
+        logger.error(f"Failed to increase brightness: {e}")
+        return f"Failed to increase brightness: {e}"
+
+def decrease_brightness() -> str:
+    """Decrease brightness by 10%"""  
+    if not SBC_AVAILABLE:
+        return "Brightness control not available"
+    
+    try:
+        current_raw = sbc.get_brightness(display=0)
+        current_val: int
+        if isinstance(current_raw, list) and current_raw:
+            current_val = int(current_raw[0])
+        elif isinstance(current_raw, (int, float)):
+            current_val = int(current_raw)
+        else:
+            # Fallback or error handling if brightness is neither int, float, nor list
+            logger.error(f"Unexpected brightness type: {type(current_raw)}")
+            return "Failed to get brightness: Unexpected type"
+        new_brightness = max(0, current_val - 10)
+        sbc.set_brightness(new_brightness, display=0)
+        logger.info(f"Brightness decreased to {new_brightness}%")
+        return f"Brightness decreased to {new_brightness}%"
+    except Exception as e:
+        logger.error(f"Failed to decrease brightness: {e}")
+        return f"Failed to decrease brightness: {e}"
+
+# System Info
+def system_info() -> str:
+    """Get basic system information"""
+    try:
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        return f"CPU usage: {cpu_percent}%, Memory usage: {memory.percent}%"
+    except ImportError:
+        return "System info not available (psutil not installed)"
+    except Exception as e:
+        return f"Failed to get system info: {e}"
