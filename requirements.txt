@@ -1,36 +1,17 @@
-# AI/ML dependencies
-groq>=0.4.0
-openai>=1.0.0
-
-# Speech processing
-SpeechRecognition>=3.10.0
-pyttsx3>=2.90
-pvporcupine>=3.0.0
-sounddevice>=0.4.6
-
-# Google Cloud TTS
-google-cloud-texttospeech>=2.14.0
-google-cloud-speech>=2.22.0
-assemblyai>=0.22.0
-openai-whisper>=20230314
-# Audio processing
-pygame>=2.5.0
-# Utilities
-python-dotenv>=1.0.0
-requests>=2.31.0
-whispercpp
-SpeechRecognition
-pydub
-gTTS
+requests>=2.32.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.1
+praw>=7.8.1
 python-dotenv
-python-multipart
-sounddevice
-soundfile
-google-api-python-client
-psutil
-pyautogui
-pyperclip
-screen-brightness-control
-comtypes
-pycaw
-pillow
+openai>=2.2.0
+pydub>=0.25.1
+pvporcupine>=3.0.5
+pyaudio>=0.2.14
+opencv-python>=4.8.1.78
+pyautogui>=0.9.54
+pillow>=10.3.0
+pywin32>=306; sys_platform == "win32"
+numpy>=2.3.3
+scipy>=1.16.2
+duckduckgo-search>=8.1.1
+mss>=9.0.1

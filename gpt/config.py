@@ -19,8 +19,10 @@ class Config:
         self.picovoice_access_key = self._get_required_env("PICOVOICE_ACCESS_KEY")
         
         # Paths and files
-        self.wakeword_path = self._get_env("WAKEWORD_PATH", 
-            default=r"assets\selina_en_windows_v3_0_0.ppn")
+        # Construct a cross-platform path for the wakeword file
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        default_wakeword_path = os.path.join(base_dir, "assets", "wakewords", "selina_en_windows_v3_0_0.ppn")
+        self.wakeword_path = self._get_env("WAKEWORD_PATH", default=default_wakeword_path)
         
         # LLM Configuration
         self.llm_model = self._get_env("LLM_MODEL", default="llama-3.1-70b-versatile")
