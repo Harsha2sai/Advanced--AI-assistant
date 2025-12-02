@@ -47,11 +47,17 @@ class GroqLLM:
                 typed_messages.append({"role": "system", "content": m["content"]})
             # Add other roles if necessary, e.g., tool
 
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=typed_messages, # Use typed_messages here
-            max_tokens=(max_tokens or self.max_tokens_default),
-            temperature=self.temperature
-        )
-        content = resp.choices[0].message.content
-        return content.strip() if content is not None else "" # Handle None case for content
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=typed_messages,  # Use typed_messages here
+                max_tokens=(max_tokens or self.max_tokens_default),
+                temperature=self.temperature
+            )
+            content = resp.choices[0].message.content
+            return content.strip() if content is not None else ""  # Handle None case for content
+        except Exception as e:
+            # Log the error for debugging
+            print(f"Error calling Groq API: {e}")
+            # Return a user-friendly error message
+            return "Sorry, I'm having trouble connecting to the language model. Please check your API key and network connection."
